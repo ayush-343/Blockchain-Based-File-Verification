@@ -1,35 +1,53 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { computeSHA256 } from '../utils/hash';
 
 const FileUploader = ({ onHashGenerated }) => {
   const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState(null);
   const [hash, setHash] = useState('');
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const inputRef = useRef(null);
+
+  const resetSelection = (notifyParent = true) => {
+    setFileName('');
+    setFileSize(null);
+    setHash('');
+    setError('');
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+    if (notifyParent) {
+      onHashGenerated(null);
+    }
+  };
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
 
     if (!file) {
       setError('Please choose a file.');
-      setFileName('');
-      setHash('');
+      resetSelection(false);
       return;
     }
 
     setIsProcessing(true);
     setError('');
     setFileName(file.name);
+    setFileSize(file.size);
 
     try {
       const digest = await computeSHA256(file);
       setHash(digest);
-      onHashGenerated(digest);
+      onHashGenerated({
+        hash: digest,
+        fileName: file.name,
+        fileSize: file.size,
+      });
     } catch (err) {
       console.error(err);
       setError('Failed to compute hash. Try another file.');
-      setHash('');
-      onHashGenerated('');
+      resetSelection();
     } finally {
       setIsProcessing(false);
     }
@@ -47,11 +65,24 @@ const FileUploader = ({ onHashGenerated }) => {
       >
         <span className="text-slate-200">Click to choose a file</span>
         <span className="text-xs text-slate-400 mt-1">SHA-256 hash is calculated instantly</span>
-        <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
+        <input
+          ref={inputRef}
+          id="file-upload"
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+        />
       </label>
 
       <div className="mt-4 space-y-2">
-        {fileName && <p className="text-sm text-slate-200">Selected: {fileName}</p>}
+        {fileName && (
+          <p className="text-sm text-slate-200">
+            Selected: {fileName}
+            {typeof fileSize === 'number' && (
+              <span className="text-slate-400"> ({(fileSize / 1024).toFixed(2)} KB)</span>
+            )}
+          </p>
+        )}
         {isProcessing && <p className="text-sm text-blue-300">Computing hash...</p>}
         {hash && (
           <p className="text-xs font-mono break-words bg-slate-900/60 border border-slate-700 rounded-md p-3">
@@ -59,6 +90,15 @@ const FileUploader = ({ onHashGenerated }) => {
           </p>
         )}
         {error && <p className="text-sm text-red-400">{error}</p>}
+        {(fileName || hash) && (
+          <button
+            type="button"
+            onClick={() => resetSelection()}
+            className="text-xs text-slate-300 underline hover:text-slate-100"
+          >
+            Clear selection
+          </button>
+        )}
       </div>
     </section>
   );

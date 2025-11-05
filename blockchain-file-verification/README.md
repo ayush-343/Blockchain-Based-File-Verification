@@ -3,10 +3,10 @@
 A local, educational framework that demonstrates how blockchain concepts can secure file integrity. Users hash a file in the browser, persist the hash on a simple proof-of-work blockchain, and later verify whether the file has been altered.
 
 ## Features
-- React + Vite (JavaScript + JSX) frontend with TailwindCSS styling
-- Node.js + Express backend with an in-memory blockchain
-- Proof-of-work mining (difficulty 2) on each new block
-- REST API covering hash storage, verification, and full chain inspection
+- React + Vite (JavaScript + JSX) frontend with TailwindCSS styling, richer dashboards, and verification history
+- Node.js + Express backend with an in-memory blockchain, file metadata capture, and chain analytics
+- Proof-of-work mining (difficulty 2) on each new block with nonce statistics
+- REST API covering hash storage, lookup, metrics, and full ledger inspection
 - Podman-ready Containerfiles for both frontend and backend services
 
 ## Prerequisites
@@ -33,11 +33,16 @@ blockchain-file-verification/
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── components/
+│   │   │   ├── BlockDetailCard.jsx
 │   │   │   ├── BlockchainViewer.jsx
-│   │   │   └── FileUploader.jsx
+│   │   │   ├── FileUploader.jsx
+│   │   │   ├── StatsBoard.jsx
+│   │   │   └── VerificationHistory.jsx
 │   │   ├── index.css
 │   │   ├── main.jsx
-│   │   └── utils/hash.js
+│   │   └── utils/
+│   │       ├── format.js
+│   │       └── hash.js
 │   ├── tailwind.config.js
 │   └── vite.config.js
 ├── podman-commands.md
@@ -79,10 +84,13 @@ Additional lifecycle commands live in [`podman-commands.md`](./podman-commands.m
 ## REST API Reference
 
 ### `POST /api/addFileHash`
-Adds a block containing the provided SHA-256 hash.
+Adds a block containing the provided SHA-256 hash and optional metadata.
 ```json
 {
-  "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a"
+  "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a",
+  "fileName": "project-report.pdf",
+  "fileSize": 42812,
+  "notes": "Release 1.2 submission"
 }
 ```
 **Response**
@@ -90,19 +98,24 @@ Adds a block containing the provided SHA-256 hash.
 {
   "message": "File hash recorded successfully",
   "block": {
-    "index": 1,
+    "index": 4,
     "timestamp": "2025-11-05T12:00:00.000Z",
     "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a",
-    "previousHash": "0037c62f...",
-    "hash": "00b9a8b9...",
-    "nonce": 8421
+    "previousHash": "005c1a0...",
+    "hash": "00931bb...",
+    "nonce": 1332,
+    "metadata": {
+      "fileName": "project-report.pdf",
+      "fileSize": 42812,
+      "notes": "Release 1.2 submission"
+    }
   },
-  "chainLength": 2
+  "chainLength": 5
 }
 ```
 
 ### `POST /api/verifyFileHash`
-Checks whether the hash exists on the blockchain.
+Checks whether the hash exists on the blockchain and returns block context when found.
 ```json
 {
   "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a"
@@ -113,15 +126,28 @@ Checks whether the hash exists on the blockchain.
 {
   "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a",
   "exists": true,
-  "message": "Hash found. File is verified."
+  "message": "Hash found. File is verified.",
+  "block": {
+    "index": 4,
+    "timestamp": "2025-11-05T12:00:00.000Z",
+    "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a",
+    "previousHash": "005c1a0...",
+    "hash": "00931bb...",
+    "nonce": 1332,
+    "metadata": {
+      "fileName": "project-report.pdf",
+      "fileSize": 42812,
+      "notes": "Release 1.2 submission"
+    }
+  }
 }
 ```
 
 ### `GET /api/getBlockchain`
-Returns the in-memory blockchain.
+Returns the full in-memory blockchain, including metadata per block.
 ```json
 {
-  "length": 2,
+  "length": 5,
   "valid": true,
   "difficulty": 2,
   "chain": [
@@ -131,31 +157,37 @@ Returns the in-memory blockchain.
       "fileHash": "GENESIS",
       "previousHash": "0",
       "hash": "f1d2f4...",
-      "nonce": 0
+      "nonce": 0,
+      "metadata": {
+        "label": "Genesis block"
+      }
     },
-    {
-      "index": 1,
-      "timestamp": "2025-11-05T12:00:00.000Z",
-      "fileHash": "9f2c94c1ee13d1d8fd17cfca9ce4d5fa1865d2ca6c6f74b09f5c5c1a58ed4c0a",
-      "previousHash": "f1d2f4...",
-      "hash": "00b9a8b9...",
-      "nonce": 8421
-    }
+    "...additional blocks..."
   ]
 }
 ```
 
+### `GET /api/getBlock/:index`
+Retrieve a single block by its index, useful for deep dives or demo scripts.
+
+### `GET /api/findByHash/:hash`
+Look up a block directly by its SHA-256 file hash.
+
+### `GET /api/metrics`
+Returns chain analytics (block counts, unique hashes, average nonce, last mined block) used by the frontend dashboard.
+
 ## Verification Workflow
-1. **Upload** a file in the frontend. Its SHA-256 hash is generated locally.
-2. **Store** the hash with "Add Hash to Blockchain". The backend mines a new block.
-3. **Verify** by re-uploading the same file later and using "Verify Hash".
-4. **Inspect** the blockchain ledger to learn how blocks link through hashes.
+1. **Upload** a file (or paste a hash manually). The browser computes SHA-256 locally and surfaces file metadata.
+2. **Annotate & store** with optional notes before mining a block via "Add Hash to Blockchain".
+3. **Verify** later by recomputing or pasting the hash, reviewing returned block metadata for full context.
+4. **Inspect** dashboards for ledger health, block stats, and recent activity. Use the ledger table or lookup endpoints for deeper analysis.
 
 ## Testing Checklist
 - [ ] Backend `npm run dev` responds to `/api/health`
-- [ ] `POST /api/addFileHash` mines block with hash starting with `00`
-- [ ] Frontend `npm run dev` allows upload, storage, and verification
-- [ ] Blockchain table shows new block after adding hash
+- [ ] `POST /api/addFileHash` mines block with hash starting with `00` and returns metadata
+- [ ] `GET /api/metrics` reports valid chain stats
+- [ ] Frontend `npm run dev` allows upload, storage, verification, and shows history entries
+- [ ] Blockchain table reflects metadata and refresh button works
 - [ ] Containers build and run via Podman commands
 
 ## Notes
