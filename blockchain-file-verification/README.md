@@ -4,7 +4,7 @@ A local, educational framework that demonstrates how blockchain concepts can sec
 
 ## Features
 - React + Vite (JavaScript + JSX) frontend with TailwindCSS styling, richer dashboards, and verification history
-- Node.js + Express backend with an in-memory blockchain, file metadata capture, and chain analytics
+- Node.js + Express backend with MongoDB persistence, file metadata capture, and chain analytics
 - Proof-of-work mining (difficulty 2) on each new block with nonce statistics
 - REST API covering hash storage, lookup, metrics, and full ledger inspection
 - Podman-ready Containerfiles for both frontend and backend services
@@ -80,6 +80,17 @@ The frontend listens on `http://localhost:5173` and proxies `/api/*` requests to
    ```
 
 Additional lifecycle commands live in [`podman-commands.md`](./podman-commands.md).
+
+## GitHub Pages Deployment
+
+This repository ships with a GitHub Actions workflow that builds the frontend and publishes it to GitHub Pages.
+
+1. Ensure the repo already has the `frontend` build artifacts committed (run `npm run build` locally to confirm).
+2. Push or merge to `main`. The `Deploy Frontend to GitHub Pages` workflow runs automatically and uploads `frontend/dist`.
+3. In GitHub → **Settings → Pages**, set **Source** to **GitHub Actions** the first time you enable Pages. The workflow output includes the live URL (e.g. `https://ayush-343.github.io/Blockchain-Based-File-Verification/`).
+4. Subsequent pushes to `main` rebuild and redeploy automatically. You can also trigger it manually via **Actions → Deploy Frontend to GitHub Pages → Run workflow**.
+
+> The workflow sets `VITE_BASE_PATH=/Blockchain-Based-File-Verification/` so paths resolve correctly when hosted at `/repo/`.
 
 ## REST API Reference
 
@@ -191,6 +202,6 @@ Returns chain analytics (block counts, unique hashes, average nonce, last mined 
 - [ ] Containers build and run via Podman commands
 
 ## Notes
-- The blockchain is kept in memory. Restarting the backend resets the chain.
+- Hashes persist in MongoDB (`fileVerification.blocks`). Provide a valid Atlas connection string in `backend/.env` before starting the backend.
 - Proof-of-work difficulty is intentionally low to keep responses fast.
 - TailwindCSS styles compile during build (`npm run build`).
