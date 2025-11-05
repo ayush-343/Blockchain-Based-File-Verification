@@ -4,14 +4,14 @@ const crypto = require('crypto');
  * Simple blockchain tailored for storing file hashes with a proof-of-work constraint.
  */
 class Block {
-  constructor(index, timestamp, fileHash, previousHash = '', metadata = {}) {
+  constructor(index, timestamp, fileHash, previousHash = '', metadata = {}, options = {}) {
     this.index = index;
-    this.timestamp = timestamp;
+    this.timestamp = timestamp instanceof Date ? timestamp.toISOString() : timestamp;
     this.fileHash = fileHash;
     this.previousHash = previousHash;
-    this.nonce = 0;
+    this.nonce = Number.isFinite(options.nonce) ? options.nonce : 0;
     this.metadata = { ...metadata };
-    this.hash = this.calculateHash();
+    this.hash = typeof options.hash === 'string' ? options.hash : this.calculateHash();
   }
 
   calculateHash() {
@@ -44,12 +44,56 @@ class Block {
       metadata: this.metadata,
     };
   }
+
+  toDocument() {
+    const json = this.toJSON();
+    return {
+      ...json,
+      timestamp: new Date(this.timestamp),
+    };
+  }
+
+  static fromData(data) {
+    if (!data) {
+      return null;
+    }
+    const timestamp = data.timestamp instanceof Date ? data.timestamp.toISOString() : data.timestamp;
+    return new Block(
+      data.index,
+      timestamp,
+      data.fileHash,
+      data.previousHash,
+      data.metadata || {},
+      { nonce: data.nonce, hash: data.hash }
+    );
+  }
 }
 
 class Blockchain {
-  constructor({ difficulty = 2 } = {}) {
+  constructor({ difficulty = 2, blocks = null } = {}) {
     this.difficulty = difficulty;
-    this.chain = [this.createGenesisBlock()];
+    if (Array.isArray(blocks) && blocks.length > 0) {
+      this.chain = blocks.map((block) => (block instanceof Block ? block : Block.fromData(block)));
+    } else {
+      this.chain = [this.createGenesisBlock()];
+    }
+  }
+
+  replaceChainFromData(blocks = []) {
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return;
+    }
+
+    const hydratedBlocks = blocks
+      .map((block) => (block instanceof Block ? block : Block.fromData(block)))
+      .filter(Boolean)
+      .sort((a, b) => a.index - b.index);
+
+    if (hydratedBlocks.length === 0) {
+      return;
+    }
+
+    this.chain = hydratedBlocks;
   }
 
   createGenesisBlock() {

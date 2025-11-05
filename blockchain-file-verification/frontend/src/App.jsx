@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { Toaster, toast } from 'react-hot-toast';
 import FileUploader from './components/FileUploader';
 import BlockchainViewer from './components/BlockchainViewer';
 import StatsBoard from './components/StatsBoard';
@@ -27,7 +28,6 @@ const App = () => {
   const [history, setHistory] = useState([]);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
-  const [toast, setToast] = useState('');
 
   const isHashValid = useMemo(() => /^[a-f0-9]{64}$/.test(currentHash), [currentHash]);
 
@@ -58,7 +58,7 @@ const App = () => {
       } catch (error) {
         console.error(error);
         if (showErrorToast) {
-          setToast('Could not load blockchain. Ensure backend is running.');
+          toast.error('Could not load blockchain. Ensure backend is running.');
         }
       } finally {
         setIsLoadingBlocks(false);
@@ -72,12 +72,12 @@ const App = () => {
   }, [loadChainData]);
 
   useEffect(() => {
-    if (!toast) {
-      return undefined;
-    }
-    const timer = setTimeout(() => setToast(''), 4000);
-    return () => clearTimeout(timer);
-  }, [toast]);
+    const interval = setInterval(() => {
+      loadChainData(false);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [loadChainData]);
 
   const handleHashGenerated = (details) => {
     if (!details || !details.hash) {
@@ -105,7 +105,7 @@ const App = () => {
 
   const handleRecordHash = async () => {
     if (!isHashValid) {
-      setToast('Provide a valid 64-character SHA-256 hash.');
+      toast.error('Provide a valid 64-character SHA-256 hash.');
       return;
     }
 
@@ -118,7 +118,7 @@ const App = () => {
         notes: note,
       });
 
-      setToast('Hash stored on blockchain.');
+      toast.success('Hash stored on blockchain.');
       setLatestBlock(data.block);
       pushHistoryEntry({
         id: `store-${Date.now()}`,
@@ -133,7 +133,7 @@ const App = () => {
       await loadChainData(false);
     } catch (error) {
       console.error(error);
-      setToast('Failed to store hash. Check backend service.');
+      toast.error('Failed to store hash. Check backend service.');
       pushHistoryEntry({
         id: `store-${Date.now()}`,
         type: 'store',
@@ -149,7 +149,7 @@ const App = () => {
 
   const handleVerifyHash = async () => {
     if (!isHashValid) {
-      setToast('Provide a valid 64-character SHA-256 hash.');
+      toast.error('Provide a valid 64-character SHA-256 hash.');
       return;
     }
 
@@ -173,9 +173,11 @@ const App = () => {
           metadata: data.block?.metadata,
         },
       });
+
+      await loadChainData(false);
     } catch (error) {
       console.error(error);
-      setToast('Verification request failed.');
+      toast.error('Verification request failed.');
       pushHistoryEntry({
         id: `verify-${Date.now()}`,
         type: 'verify',
@@ -298,11 +300,16 @@ const App = () => {
         <VerificationHistory history={history} onClear={clearHistory} />
       </section>
 
-      {toast && (
-        <aside className="fixed bottom-6 right-6 bg-slate-800 border border-slate-700 px-4 py-3 rounded-lg shadow-lg text-sm">
-          {toast}
-        </aside>
-      )}
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: '#0f172a',
+            color: '#e2e8f0',
+            border: '1px solid #1e293b',
+          },
+        }}
+      />
     </main>
   );
 };
